@@ -2,156 +2,49 @@
 
 namespace AwStudio\ContentParser;
 
-use Closure;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
+use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 
-class Content extends Collection
+class Content implements CastsAttributes
 {
     /**
-     * Create new Content instance.
+     * Create new SiteContent instance.
      *
-     * @param array       $items
-     * @param Model|mixed $model
+     * @param  string $collection
+     * @return void
      */
     public function __construct(
-        protected mixed $model,
-        $items = []
+        protected $collection = Content::class
     ) {
-        parent::__construct($items);
+        //
     }
 
     /**
-     * Parse the items.
+     * Cast the given value.
      *
-     * @param  array $resources
-     * @return $this
+     * @param  \Illuminate\Database\Eloquent\Model $model
+     * @param  string                              $key
+     * @param  mixed                               $value
+     * @param  array                               $attributes
+     * @return mixed
      */
-    public function parse($resources = [])
+    public function get($model, string $key, $value, array $attributes)
     {
-        $assets = $this->loadAssets();
+        $items = json_decode($value, true);
 
-        $this->handleRecursive($this->items, function (&$value) use ($assets, $resources) {
-            $this->parseValue($value, $assets, $resources);
-        });
-
-        return $this;
+        return new ($this->collection)($model, $items);
     }
 
     /**
-     * Load the required assets.
+     * Prepare the given value for storage.
      *
-     * @return array
+     * @param  \Illuminate\Database\Eloquent\Model $model
+     * @param  string                              $key
+     * @param  mixed                               $value
+     * @param  array                               $attributes
+     * @return mixed
      */
-    protected function loadAssets()
+    public function set($model, string $key, $value, array $attributes)
     {
-        $assets = [];
-
-        $this->handleRecursive(clone $this->items, function ($value) use (&$assets) {
-            if (! is_string($value)) {
-                return;
-            }
-
-            foreach ($this->parseAssets($value) as $key => $value) {
-                if (! array_key_exists($key, $assets)) {
-                    $assets[$key] = [];
-                }
-
-                if (is_array($value)) {
-                    $assets[$key] = array_merge($assets[$key], $value);
-                } else {
-                    $assets[$key] = array_merge($assets[$key], [$value]);
-                }
-            }
-        });
-
-        foreach ($assets as $name => $keys) {
-            $assets[$name] = $this->model
-                ->{"{$name}Query"}()
-                ->whereKeyIn($keys)
-                ->get();
-        }
-
-        return $assets;
-    }
-
-    /**
-     * Handle the given items recursively.
-     *
-     * @param  array   $items
-     * @param  Closure $closure
-     * @return void
-     */
-    protected function handleRecursive(array &$items, Closure $closure)
-    {
-        foreach ($items as &$item) {
-            if (! is_array($item)) {
-                continue;
-            }
-
-            if (array_keys($item) === range(0, count($item) - 1)) {
-                $this->handleRecursive($item, $closure);
-            } elseif (array_key_exists('value', $item)) {
-                $this->handleRecursive($item['value'], $closure);
-                $closure($item['value']);
-            }
-        }
-    }
-
-    /**
-     * Parse the given value.
-     *
-     * @param  mixed $value
-     * @return void
-     */
-    protected function parseValue(mixed &$value, $assets = [], $resources = [])
-    {
-        $url = parse_url($value);
-
-        if (($url['scheme'] ?? null) != 'relation') {
-            return;
-        }
-
-        $type = $url['user'] ?? null;
-        $keys = $url['host'] ?? null;
-
-        if (! $type || ! $keys) {
-            return;
-        }
-
-        $isMany = str_contains($keys, ',');
-
-        if (! array_key_exists($type, $assets) || ! $assets[$type] instanceof Collection) {
-            $value = null;
-
-            return;
-        }
-
-        if ($isMany) {
-            $value = $assets[$type]->whereIn('key', explode(',', $keys));
-        } else {
-            $value = $assets[$type]->whereIn('key', $keys)->first();
-        }
-    }
-
-    /**
-     * Parse assets.
-     *
-     * @param  string $value
-     * @return array
-     */
-    protected function parseAssets(string &$value): array
-    {
-        $url = parse_url($value);
-
-        if (($url['scheme'] ?? null) != 'relation') {
-            return [];
-        }
-
-        if ($type = $url['user'] ?? null && $keys = $url['host'] ?? null) {
-            return [$type => explode($keys, ',')];
-        }
-
-        return [];
+        return json_encode($value);
     }
 }
