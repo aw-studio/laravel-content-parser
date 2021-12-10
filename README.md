@@ -3,7 +3,7 @@
 ## Install
 
 ```shell
-composer require laravel-content-parser
+composer require aw-studio/laravel-content-parser
 ```
 
 ## Usage
